@@ -14,33 +14,23 @@ st.set_page_config(
 
 def get_color_for_rating(rating):
     """Retorna uma cor com base na nota média."""
-    if rating < 5:
-        return "red"
-    elif rating < 6:
-        return "orange"
-    elif rating < 7:
-        return "gray"
-    elif rating < 8.5:
-        return "blue"
-    elif rating < 9.5:
-        return "green"
-    else:
-        return "violet"
+    if pd.isna(rating): return "gray"
+    if rating < 5: return "red"
+    if rating < 6: return "orange"
+    if rating < 7: return "gray"
+    if rating < 8.5: return "blue"
+    if rating < 9.5: return "green"
+    return "violet"
 
 def get_rating_label(rating):
     """Retorna um rótulo textual para a nota."""
-    if rating < 5:
-        return "Péssimo"
-    elif rating < 6:
-        return "Ruim"
-    elif rating < 7:
-        return "Regular"
-    elif rating < 8.5:
-        return "Bom"
-    elif rating < 9.5:
-        return "Ótimo"
-    else:
-        return "Excelente"
+    if pd.isna(rating): return "N/A"
+    if rating < 5: return "Péssimo"
+    if rating < 6: return "Ruim"
+    if rating < 7: return "Regular"
+    if rating < 8.5: return "Bom"
+    if rating < 9.5: return "Ótimo"
+    return "Excelente"
 
 def format_list_to_string(data_list):
     """Converte uma lista em uma string separada por '; '."""
@@ -120,7 +110,6 @@ if 'editing_album' in st.session_state and st.session_state.editing_album:
     with st.form("edit_album_form"):
         st.subheader("Informações do Álbum")
         
-        # Converte a string de artistas para uma lista para o multiselect
         current_artists_list = format_string_to_list(album_df['artists'].iloc[0])
         all_artists = sorted(list(set(item for sublist in df['artists'].dropna().apply(format_string_to_list) for item in sublist)))
         
@@ -147,14 +136,12 @@ if 'editing_album' in st.session_state and st.session_state.editing_album:
             all_composers = sorted(list(set(item for sublist in df['composers'].dropna().apply(format_string_to_list) for item in sublist)))
             new_composers = cols[2].multiselect("Compositores", options=all_composers, default=current_composers_list, key=f"comp_{index}")
             
-            # Lógica de avaliação
             ratings = {}
             for u in ["jom", "jov", "job"]:
                 rating_col = f"rating_{u}"
                 is_current_user = (u == st.session_state.user)
                 current_rating = row[rating_col] if pd.notna(row[rating_col]) else 0.0
                 
-                # Usuário logado pode editar, outros apenas visualizam
                 if is_current_user:
                     ratings[rating_col] = cols[3].number_input(f"Nota ({u.upper()})", value=current_rating, min_value=0.0, max_value=10.0, step=0.5, key=f"rating_{u}_{index}")
                 else:
@@ -171,7 +158,6 @@ if 'editing_album' in st.session_state and st.session_state.editing_album:
 
         submitted = st.form_submit_button("Salvar Alterações")
         if submitted:
-            # Atualiza o DataFrame principal
             original_indices = df[(df['album'] == album_to_edit) & (df['artists'] == artist_to_edit)].index
             df.drop(original_indices, inplace=True)
 
@@ -193,7 +179,6 @@ if 'editing_album' in st.session_state and st.session_state.editing_album:
             new_df = pd.DataFrame(new_rows)
             df_updated = pd.concat([df, new_df], ignore_index=True)
             
-            # Atualiza o Google Sheets
             conn.update(worksheet="Musicas", data=df_updated)
             
             st.success(f"Álbum '{edited_album_title}' atualizado com sucesso!")
@@ -217,27 +202,22 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 with tab1:
     st.header("Explore sua coleção")
-
-    # Filtros
     col1, col2 = st.columns(2)
     with col1:
-        # Extrai todos os artistas únicos, lidando com múltiplos artistas por entrada
         all_artists_flat = sorted(list(set(item for sublist in df['artists'].dropna().apply(format_string_to_list) for item in sublist)))
         selected_artists = st.multiselect("Filtrar por Artista(s)", options=all_artists_flat)
 
     filtered_df = df.copy()
     if selected_artists:
-        # Filtra o DF para conter apenas entradas que tenham PELO MENOS UM dos artistas selecionados
         filtered_df = df[df['artists'].apply(lambda x: any(artist in format_string_to_list(x) for artist in selected_artists))]
 
     with col2:
         if selected_artists:
-            # Se artistas foram selecionados, mostra apenas álbuns desses artistas
-            available_albums = sorted(filtered_df['album'].dropna().unique())
+            # CORREÇÃO: Converte todos os itens para string antes de ordenar
+            available_albums = sorted(map(str, filtered_df['album'].dropna().unique()))
         else:
-            # Senão, mostra todos os álbuns
-            available_albums = sorted(df['album'].dropna().unique())
-        
+            # CORREÇÃO: Converte todos os itens para string antes de ordenar
+            available_albums = sorted(map(str, df['album'].dropna().unique()))
         selected_albums = st.multiselect("Filtrar por Álbum(ns)", options=available_albums)
 
     if selected_albums:
@@ -245,7 +225,6 @@ with tab1:
 
     st.dataframe(filtered_df, use_container_width=True)
 
-    # Dados consolidados
     if not filtered_df.empty:
         st.subheader("Média de Avaliações (Filtro Atual)")
         avg_cols = st.columns(3)
@@ -256,67 +235,61 @@ with tab1:
 
 with tab2:
     st.header("Adicionar Novas Músicas ou Álbuns")
-
     add_type = st.radio("O que você deseja adicionar?", ("Álbum Inteiro", "Música Avulsa"), horizontal=True)
 
     if add_type == "Álbum Inteiro":
-        with st.form("add_album_form", clear_on_submit=True):
-            st.subheader("Informações do Álbum")
-            
-            # Lógica para artistas
-            all_artists_flat = sorted(list(set(item for sublist in df['artists'].dropna().apply(format_string_to_list) for item in sublist)))
-            album_artists = st.multiselect(
-                "Artista(s) do Álbum", 
-                options=all_artists_flat,
-                help="Selecione artistas existentes ou digite novos nomes e pressione Enter."
-            )
-            new_artist_input = st.text_input("Adicionar novo artista (opcional)", help="Digite um novo nome e adicione na seleção acima.")
-            
-            album_title = st.text_input("Título do Álbum")
-            album_year = st.number_input("Ano do Álbum", min_value=1900, max_value=2100, step=1)
-            
-            st.subheader("Faixas do Álbum")
-            st.markdown("Insira o título e os compositores de cada faixa. O número da faixa será definido pela ordem de inserção.")
-            
-            if 'tracks' not in st.session_state:
-                st.session_state.tracks = []
+        st.subheader("Informações do Álbum")
+        all_artists_flat = sorted(list(set(item for sublist in df['artists'].dropna().apply(format_string_to_list) for item in sublist)))
+        album_artists = st.multiselect(
+            "Artista(s) do Álbum",
+            options=all_artists_flat,
+            help="Selecione artistas existentes ou digite novos nomes e pressione Enter."
+        )
+        new_artist_input = st.text_input("Adicionar novo artista (opcional)", help="Digite um novo nome e adicione na seleção acima.")
+        album_title = st.text_input("Título do Álbum")
+        album_year = st.number_input("Ano do Álbum", min_value=1900, max_value=2100, step=1, value=2024)
+        
+        st.subheader("Faixas do Álbum")
+        st.markdown("Insira o título e os compositores de cada faixa.")
 
-            def add_track():
-                st.session_state.tracks.append({'title': '', 'composers': []})
+        if 'tracks' not in st.session_state:
+            st.session_state.tracks = []
 
-            def remove_track(index):
-                st.session_state.tracks.pop(index)
+        def add_track():
+            st.session_state.tracks.append({'title': '', 'composers': []})
 
-            cols_header = st.columns([6, 6, 1])
-            cols_header[0].write("**Título da Faixa**")
-            cols_header[1].write("**Compositor(es)**")
-            
-            all_composers_flat = sorted(list(set(item for sublist in df['composers'].dropna().apply(format_string_to_list) for item in sublist)))
+        def remove_track(index):
+            st.session_state.tracks.pop(index)
 
-            for i, track in enumerate(st.session_state.tracks):
-                cols = st.columns([6, 6, 1])
-                st.session_state.tracks[i]['title'] = cols[0].text_input(f"Título Faixa {i+1}", value=track['title'], label_visibility="collapsed")
-                st.session_state.tracks[i]['composers'] = cols[1].multiselect(f"Compositores Faixa {i+1}", options=all_composers_flat, default=track['composers'], label_visibility="collapsed")
-                cols[2].button("🗑️", key=f"del_{i}", on_click=remove_track, args=(i,))
+        all_composers_flat = sorted(list(set(item for sublist in df['composers'].dropna().apply(format_string_to_list) for item in sublist)))
+        
+        for i, track in enumerate(st.session_state.tracks):
+            cols = st.columns([6, 6, 1])
+            st.session_state.tracks[i]['title'] = cols[0].text_input(f"Título Faixa {i+1}", value=track['title'], label_visibility="collapsed", key=f"title_{i}")
+            st.session_state.tracks[i]['composers'] = cols[1].multiselect(f"Compositores Faixa {i+1}", options=all_composers_flat, default=track['composers'], label_visibility="collapsed", key=f"comp_{i}")
+            cols[2].button("🗑️", key=f"del_{i}", on_click=remove_track, args=(i,), help="Remover faixa")
 
-            st.button("Adicionar mais uma faixa", on_click=add_track)
+        st.button("Adicionar mais uma faixa", on_click=add_track)
+        
+        st.markdown("---")
 
+        with st.form("add_album_form"):
             submitted = st.form_submit_button("Salvar Álbum")
             if submitted:
-                if not album_artists and not new_artist_input:
+                final_artists = album_artists
+                if new_artist_input and new_artist_input not in final_artists:
+                    final_artists.append(new_artist_input)
+
+                if not final_artists:
                     st.error("É necessário informar pelo menos um artista.")
                 elif not album_title:
                     st.error("O título do álbum é obrigatório.")
                 elif not st.session_state.tracks:
                     st.error("Adicione pelo menos uma faixa ao álbum.")
                 else:
-                    final_artists = album_artists
-                    if new_artist_input and new_artist_input not in final_artists:
-                        final_artists.append(new_artist_input)
-                    
                     new_rows = []
                     for i, track in enumerate(st.session_state.tracks):
-                        if track['title']: # Só adiciona se o título não estiver vazio
+                        if track['title']:
                             new_row = {
                                 'trackNumber': i + 1,
                                 'title': track['title'],
@@ -335,7 +308,8 @@ with tab2:
                         df_updated = pd.concat([df, new_df], ignore_index=True)
                         conn.update(worksheet="Musicas", data=df_updated)
                         st.success(f"Álbum '{album_title}' adicionado com sucesso!")
-                        st.session_state.tracks = [] # Limpa a lista de faixas
+                        st.session_state.tracks = []
+                        st.rerun()
                     else:
                         st.warning("Nenhuma faixa com título foi adicionada.")
 
@@ -343,15 +317,13 @@ with tab2:
         with st.form("add_song_form", clear_on_submit=True):
             st.subheader("Informações da Música")
             
-            # Lógica para artistas
             all_artists_flat = sorted(list(set(item for sublist in df['artists'].dropna().apply(format_string_to_list) for item in sublist)))
             song_artists = st.multiselect("Artista(s)", options=all_artists_flat)
             
-            # Lógica para álbum
             if song_artists:
-                # Mostra álbuns dos artistas selecionados
                 artist_albums_df = df[df['artists'].apply(lambda x: any(artist in format_string_to_list(x) for artist in song_artists))]
-                album_options = sorted(artist_albums_df['album'].dropna().unique())
+                # CORREÇÃO: Converte todos os itens para string antes de ordenar
+                album_options = sorted(map(str, artist_albums_df['album'].dropna().unique()))
             else:
                 album_options = []
 
@@ -362,14 +334,18 @@ with tab2:
                 song_year = st.number_input("Ano", min_value=1900, max_value=2100, step=1)
             else:
                 song_album = album_choice
-                # Preenche o ano automaticamente
-                year_val = int(df[df['album'] == song_album]['year'].iloc[0])
-                song_year = st.number_input("Ano", value=year_val, disabled=True)
+                # Garante que o ano seja numérico antes de converter para int
+                year_val_series = pd.to_numeric(df[df['album'] == song_album]['year'], errors='coerce').dropna()
+                if not year_val_series.empty:
+                    year_val = int(year_val_series.iloc[0])
+                    song_year = st.number_input("Ano", value=year_val, disabled=True)
+                else:
+                    song_year = st.number_input("Ano", min_value=1900, max_value=2100, step=1)
+
 
             song_title = st.text_input("Título da Música")
             track_number = st.number_input("Número da Faixa", min_value=1, step=1)
 
-            # Lógica para compositores
             all_composers_flat = sorted(list(set(item for sublist in df['composers'].dropna().apply(format_string_to_list) for item in sublist)))
             song_composers = st.multiselect("Compositor(es)", options=all_composers_flat)
 
@@ -395,7 +371,6 @@ with tab2:
 
 # --- LÓGICA PARA AS ABAS "PRÓXIMOS A OUVIR" E "CONCLUÍDOS" ---
 if not df.empty:
-    # Agrupando por álbum para calcular estatísticas
     album_stats = df.groupby(['album', 'artists', 'year']).agg(
         total_tracks=('title', 'count'),
         rated_tracks=(USER_RATING_COL, lambda x: x.notna().sum()),
@@ -403,12 +378,10 @@ if not df.empty:
     ).reset_index()
     album_stats['completion_perc'] = (album_stats['rated_tracks'] / album_stats['total_tracks']) * 100
 
-    # DataFrame para próximos a ouvir (incompletos)
     next_to_listen = album_stats[album_stats['completion_perc'] < 100].sort_values(
         by='completion_perc', ascending=False
     )
     
-    # DataFrame para concluídos
     completed_albums = album_stats[album_stats['completion_perc'] == 100].sort_values(
         by='avg_rating', ascending=False
     )
@@ -420,7 +393,6 @@ with tab3:
     st.header(f"Sua jornada musical, {st.session_state.user.upper()}")
     st.markdown("Álbuns para você explorar, ordenados pelo seu progresso.")
     
-    # Filtros para "Próximos a Ouvir"
     f_col1, f_col2 = st.columns(2)
     all_artists_flat = sorted(list(set(item for sublist in next_to_listen['artists'].dropna().apply(format_string_to_list) for item in sublist)))
     
@@ -450,12 +422,10 @@ with tab3:
                     st.session_state.editing_album = (row['album'], row['artists'])
                     st.rerun()
 
-
 with tab4:
     st.header("🏆 Álbuns 100% Avaliados por Você")
     st.markdown("Sua galeria de álbuns finalizados, classificados pela sua nota média.")
     
-    # Filtros para "Concluídos"
     fc_col1, fc_col2 = st.columns(2)
     all_artists_completed = sorted(list(set(item for sublist in completed_albums['artists'].dropna().apply(format_string_to_list) for item in sublist)))
     
@@ -476,22 +446,24 @@ with tab4:
             color = get_color_for_rating(row['avg_rating'])
             label = get_rating_label(row['avg_rating'])
             
-            st.markdown(f"""
-            <div style="border: 2px solid {color}; border-radius: 10px; padding: 15px; margin-bottom: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h3 style="margin: 0; color: {color};">{row['album']}</h3>
-                        <p style="margin: 0; color: #888;">{row['artists']} ({int(row['year'])})</p>
-                    </div>
-                    <div style="text-align: right;">
-                        <p style="margin: 0; font-size: 1.5em; font-weight: bold; color: {color};">{row['avg_rating']:.2f}</p>
-                        <p style="margin: 0; color: {color};">{label}</p>
+            main_cols = st.columns([10, 1])
+            with main_cols[0]:
+                st.markdown(f"""
+                <div style="border: 2px solid {color}; border-radius: 10px; padding: 15px; height: 100%;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3 style="margin: 0; color: {color};">{row['album']}</h3>
+                            <p style="margin: 0; color: #888;">{row['artists']} ({int(row['year'])})</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <p style="margin: 0; font-size: 1.5em; font-weight: bold; color: {color};">{row['avg_rating']:.2f}</p>
+                            <p style="margin: 0; color: {color};">{label}</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             
-            # Adicionando o botão de edição fora do HTML para funcionalidade
-            if st.button("✏️ Editar", key=f"edit_comp_{index}", help="Editar este álbum"):
-                st.session_state.editing_album = (row['album'], row['artists'])
-                st.rerun()
+            with main_cols[1]:
+                if st.button("✏️", key=f"edit_comp_{index}", help="Editar este álbum"):
+                    st.session_state.editing_album = (row['album'], row['artists'])
+                    st.rerun()

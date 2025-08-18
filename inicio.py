@@ -142,16 +142,15 @@ if 'editing_album' in st.session_state and st.session_state.editing_album:
                 current_rating = row[rating_col]
 
                 if is_current_user:
-                    # --- CORREÇÃO DO BUG: Usando st.selectbox para evitar o default para zero ---
                     rating_options = ["Sem nota"] + [round(x, 1) for x in np.arange(0.0, 10.5, 0.5)]
                     
                     if pd.isna(current_rating):
-                        current_index = 0  # "Sem nota"
+                        current_index = 0
                     else:
                         try:
                             current_index = rating_options.index(current_rating)
                         except ValueError:
-                            current_index = 0 # Default para "Sem nota" se o valor não estiver na lista
+                            current_index = 0
 
                     selected_rating = cols[3].selectbox(
                         f"Nota ({u.upper()})",
@@ -305,18 +304,20 @@ elif page == "➕ Adicionar Dados":
                         st.warning("Nenhuma faixa com título foi adicionada.")
 
     if add_type == "Música Avulsa":
-        with st.form("add_song_form", clear_on_submit=True):
-            st.subheader("Informações da Música")
-            
-            all_artists_flat = sorted(list(set(item for sublist in df['artists'].dropna().apply(format_string_to_list) for item in sublist)))
-            song_artists = st.multiselect("Artista(s)", options=all_artists_flat)
-            
-            if song_artists:
-                artist_albums_df = df[df['artists'].apply(lambda x: any(artist in format_string_to_list(x) for artist in song_artists))]
-                album_options = sorted(map(str, artist_albums_df['album'].dropna().unique()))
-            else:
-                album_options = []
+        st.subheader("Informações da Música")
+        
+        # --- CORREÇÃO DO BUG: Seleção de artista movida para fora do formulário ---
+        all_artists_flat = sorted(list(set(item for sublist in df['artists'].dropna().apply(format_string_to_list) for item in sublist)))
+        song_artists = st.multiselect("1. Selecione o(s) Artista(s)", options=all_artists_flat)
+        
+        if song_artists:
+            artist_albums_df = df[df['artists'].apply(lambda x: any(artist in format_string_to_list(x) for artist in song_artists))]
+            album_options = sorted(map(str, artist_albums_df['album'].dropna().unique()))
+        else:
+            album_options = []
 
+        with st.form("add_song_form", clear_on_submit=True):
+            st.markdown("2. Preencha os detalhes da música")
             album_choice = st.selectbox("Álbum", options=["Novo Álbum"] + album_options)
             
             if album_choice == "Novo Álbum":
@@ -339,6 +340,7 @@ elif page == "➕ Adicionar Dados":
 
             submitted = st.form_submit_button("Salvar Música")
             if submitted:
+                # A variável 'song_artists' vem de fora do form
                 if not song_artists or not song_album or not song_title:
                     st.error("Artista, Álbum e Título são campos obrigatórios.")
                 else:

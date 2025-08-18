@@ -139,12 +139,33 @@ if 'editing_album' in st.session_state and st.session_state.editing_album:
             for u in ["jom", "jov", "job"]:
                 rating_col = f"rating_{u}"
                 is_current_user = (u == st.session_state.user)
-                current_rating = row[rating_col] if pd.notna(row[rating_col]) else 0.0
-                
+                current_rating = row[rating_col]
+
                 if is_current_user:
-                    ratings[rating_col] = cols[3].number_input(f"Nota ({u.upper()})", value=current_rating, min_value=0.0, max_value=10.0, step=0.5, key=f"rating_{u}_{index}")
+                    # --- CORREÇÃO DO BUG: Usando st.selectbox para evitar o default para zero ---
+                    rating_options = ["Sem nota"] + [round(x, 1) for x in np.arange(0.0, 10.5, 0.5)]
+                    
+                    if pd.isna(current_rating):
+                        current_index = 0  # "Sem nota"
+                    else:
+                        try:
+                            current_index = rating_options.index(current_rating)
+                        except ValueError:
+                            current_index = 0 # Default para "Sem nota" se o valor não estiver na lista
+
+                    selected_rating = cols[3].selectbox(
+                        f"Nota ({u.upper()})",
+                        options=rating_options,
+                        index=current_index,
+                        key=f"rating_{u}_{index}"
+                    )
+
+                    if selected_rating == "Sem nota":
+                        ratings[rating_col] = np.nan
+                    else:
+                        ratings[rating_col] = float(selected_rating)
                 else:
-                    cols[3].metric(f"Nota ({u.upper()})", f"{current_rating:.1f}")
+                    cols[3].metric(f"Nota ({u.upper()})", f"{current_rating:.1f}" if pd.notna(current_rating) else "N/A")
                     ratings[rating_col] = current_rating
 
             track_data = {'trackNumber': new_track_number, 'title': new_title, 'composers': format_list_to_string(new_composers), **ratings}
@@ -346,7 +367,9 @@ elif page == "🎧 Próximos a Ouvir" or page == "🏆 Álbuns Concluídos":
         st.markdown("Álbuns para você explorar, ordenados pelo seu progresso.")
         
         if not album_stats.empty:
-            next_to_listen = album_stats[album_stats['completion_perc'] < 100].sort_values(by='completion_perc', ascending=False)
+            next_to_listen = album_stats[
+                (album_stats['rated_tracks'] >= 1) & (album_stats['completion_perc'] < 100)
+            ].sort_values(by='completion_perc', ascending=False)
         else:
             next_to_listen = pd.DataFrame()
         
@@ -364,7 +387,7 @@ elif page == "🎧 Próximos a Ouvir" or page == "🏆 Álbuns Concluídos":
             filtered_next = filtered_next[filtered_next['year'].isin(year_filter_next)]
 
         if filtered_next.empty:
-            st.info("Nenhum álbum para mostrar com os filtros atuais, ou você já ouviu tudo!")
+            st.info("Nenhum álbum para mostrar. Comece a avaliar as músicas de um álbum!")
         else:
             for index, row in filtered_next.iterrows():
                 with st.container(border=True):
